@@ -34,7 +34,9 @@ jobs:
       - run: cargo doc --no-deps
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./target/doc/pool
+          path: ./target/doc
+
+      - run: echo '<meta http-equiv="refresh" content="0; url=pool">' > ./target/doc/index.html
 
       - id: deployment
         uses: actions/deploy-pages@v4

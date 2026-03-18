@@ -67,6 +67,7 @@
 
 use std::{
     collections::HashSet,
+    fmt::Debug,
     mem::MaybeUninit,
     ops::{Deref, DerefMut, Index, IndexMut},
 };
@@ -76,7 +77,6 @@ use bit_vec::BitVec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Id(u32, u32);
 
-#[derive(Debug)]
 struct Bucket<T> {
     items: Box<[MaybeUninit<T>]>,
     index: usize,
@@ -94,6 +94,18 @@ impl<T> Deref for Bucket<T> {
 impl<T> DerefMut for Bucket<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.items
+    }
+}
+
+impl<T> Debug for Bucket<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ones = self.init.count_ones();
+
+        f.debug_struct("Bucket")
+            .field("capacity", &self.cap())
+            .field("length", &self.len())
+            .field("init_count", &ones)
+            .finish()
     }
 }
 
@@ -231,10 +243,18 @@ impl<T> Drop for Bucket<T> {
     }
 }
 
-#[derive(Debug)]
 pub struct Pool<T> {
     buckets: Vec<Bucket<T>>,
     free_slots: Vec<Id>,
+}
+
+impl<T> Debug for Pool<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pool")
+            .field("buckets", &self.buckets)
+            .field("free_slot_count", &self.free_slots)
+            .finish()
+    }
 }
 
 impl<T> Pool<T> {

@@ -1,55 +1,23 @@
 //! This crate provides a container to group multiple, independent object allocations
-//! together in memory. It does so by using buckets of uninitialized memory and tracking
-//! the state for safe access.
+//! together in memory. It does so by using buckets of uninitialized memory and tracks
+//! initialization state for safe access.
+//!
+//! ```
+//! # use pool::Pool;
+//! let mut p = Pool::new();
+//!
+//! let id = p.alloc(23);
+//!
+//! // Access with id
+//! let n = &mut p[id];
+//! *n *= 2;
+//!
+//! assert_eq!(p[id], 46);
+//! ```
 //!
 //! Each allocation is associated with an [`Id`]. The IDs don't have generation tracking
 //! so, multiple different allocations can have identical IDs but their lifetimes will
 //! never intersect.
-//!
-//! There are two main ways to allocate slots:
-//!   - [`Pool::alloc`]
-//!   - [`Pool::alloc_contiguous`]
-//!
-//! The former allocates a single element and consecutive calls to it have no guarantee
-//! about how the element is allocated. The element may be allocated far away in an unused
-//! slot of an item freed prior, or really close by.
-//!
-//! The latter takes an iterator of values and guarantees that all values are allocated
-//! next to each other (and returns a slice to them).
-//!
-//! There are two main ways to query IDs:
-//!   - [`Pool::get`] / [`Pool::get_mut`]
-//!   - [`Pool::borrow_batch_mut`]
-//!
-//! The former options return a single (im)mutable reference to the specified item, or [`None`].
-//! They also have unsafe counterparts ([`Pool::get_unchecked`] / [`Pool::get_mut_unchecked`]) which
-//! have no runtime checks, similar to slices.
-//!
-//! The latter option offers a way to safely bypass Rust's borrow checker.
-//! Similar to a slice, taking mutable references to two different elements is a completely valid
-//! and safe thing to do, but the borrow checker cannot prove at compile time that this is safe.
-//! Because of this very reason, the `.split_at` function was created.
-//!
-//! [`Pool::borrow_batch_mut`] offers to be the `.split_at` equivalent for [`Pool`]. Check its
-//! documentation for more detail. Also see [`Pool::borrow_batch_mut_unchecked`] for a faster
-//! but unsafe alternative.
-//!
-//! There are two main ways to deallocate slots and remove a value:
-//!   - [`Pool::free`]
-//!   - [`Pool::take`]
-//!
-//! The former simply drops the value and marks it as uninitialized. It's analogous to
-//! calling [`drop`] on an [`Option`].
-//!
-//! The latter drops the value and returns it, if it exists. It's analogous to [`Option::take`].
-//!
-//! [`Pool`] also provides a way for the caller to manunally initialize an allocated slot
-//! via [`Pool::alloc_uninit`]. An example use case would be to initialize a chonky structure
-//! without copying memory around.
-//!
-//! [`Pool::alloc_uninit`] returns an [`Id`] and a mutable reference to a [`MaybeUninit`] for
-//! manual initialization. The caller must ensure the slot is initialized before any read/writes.
-//! See the [`Pool::alloc_uninit`] documentation for further information.
 //!
 //! ```
 //! # use pool::Pool;
@@ -64,6 +32,66 @@
 //! // single allocations.
 //! assert_eq!(id_a, id_b);
 //! ```
+//!
+//! # Allocation
+//!
+//! There are two main ways to allocate slots:
+//!   - [`Pool::alloc`]
+//!   - [`Pool::alloc_contiguous`]
+//!
+//! The former allocates a single element and consecutive calls to it have no guarantee
+//! about how the elements are allocated. The element may be allocated far away in an unused
+//! slot of an item freed prior, or really close by.
+//!
+//! The latter takes an iterator of values and guarantees that all values are allocated
+//! next to each other (and returns a slice to them).
+//!
+//! # Query
+//!
+//! There are three main ways to query IDs:
+//!   - [`Index`] / [`IndexMut`]
+//!   - [`Pool::get`] / [`Pool::get_mut`]
+//!   - [`Pool::borrow_batch_mut`]
+//!
+//! [`Index`] and [`IndexMut`] (indexed via the [`Id`]) type return a single (im)mutable
+//! reference to the specified item, or panic if the id is invalid.
+//!
+//! [`Pool::get`] and [`Pool::get_mut`] return a single (im)mutable reference to the specified item, or [`None`].
+//! They also have unsafe counterparts ([`Pool::get_unchecked`] / [`Pool::get_mut_unchecked`]) which
+//! have no runtime checks, similar to slices.
+//!
+//! [`Pool::borrow_batch_mut`] offers a way to safely bypass Rust's borrow checker.
+//! Similar to a slice, taking mutable references to two different elements is a completely valid
+//! and safe thing to do, but the borrow checker cannot prove at compile time that this is safe.
+//! Because of this very reason, the `.split_at` function was created.
+//!
+//! [`Pool::borrow_batch_mut`] offers to be the `.split_at` equivalent for [`Pool`]. Check its
+//! documentation for more detail. Also see [`Pool::borrow_batch_mut_unchecked`] for a faster
+//! but unsafe alternative.
+//!
+//! # Deallocation
+//!
+//! There are two main ways to deallocate slots and remove a value:
+//!   - [`Pool::free`]
+//!   - [`Pool::take`]
+//!
+//! The former simply drops the value and marks it as uninitialized. It's analogous to
+//! calling [`drop`] on an [`Option`].
+//!
+//! The latter drops the value and returns it, if it exists. It's analogous to [`Option::take`].
+//!
+//! # Unsafe access
+//!
+//! [`Pool`] also provides a way for the caller to manunally initialize an allocated slot
+//! via [`Pool::alloc_uninit`]. An example use case would be to initialize a chonky structure
+//! without copying memory around.
+//!
+//! [`Pool::alloc_uninit`] returns an [`Id`] and a mutable reference to a [`MaybeUninit`] for
+//! manual initialization. The caller must ensure the slot is initialized before any read/writes.
+//! See the [`Pool::alloc_uninit`] documentation for further information.
+//!
+//! # See also
+//! See [per-function documentation][Pool] for more details about how they work.
 
 use std::{
     collections::HashSet,
@@ -696,5 +724,17 @@ mod test {
         drop(counter);
 
         assert_eq!(count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn index_op() {
+        let mut p = Pool::new();
+
+        let id = p.alloc(23);
+
+        let n = &mut p[id];
+        *n *= 2;
+
+        assert_eq!(p[id], 46);
     }
 }

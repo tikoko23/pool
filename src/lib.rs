@@ -329,7 +329,7 @@ impl<T> Pool<T> {
     }
 
     /// # Safety
-    /// `id` must be associated with an initialized item that is allocated AND initialized by this pool.
+    /// `id` must be associated with an initialized item that is allocated by this pool.
     pub unsafe fn get_unchecked(&self, id: Id) -> &T {
         unsafe { self.buckets[id.0 as usize][id.1 as usize].assume_init_ref() }
     }
@@ -341,7 +341,7 @@ impl<T> Pool<T> {
     }
 
     /// # Safety
-    /// `id` must be associated with an initialized item that is allocated AND initialized by this pool.
+    /// `id` must be associated with an initialized item that is allocated by this pool.
     pub unsafe fn get_mut_unchecked(&mut self, id: Id) -> &mut T {
         unsafe { self.buckets[id.0 as usize][id.1 as usize].assume_init_mut() }
     }
@@ -422,7 +422,8 @@ impl<T> Pool<T> {
 
     /// Borrow multiple elements mutably at once with different IDs.
     ///
-    /// This function has no immutable counterpart as it's already possible to acive with [`Pool::get`].
+    /// This function has no immutable counterpart as it's already possible to achive the same
+    /// behavior with [`Pool::get`].
     /// This function is the safe alternative to [`Pool::borrow_batch_mut_unchecked`].
     /// Internally, a [`HashSet`] is used in order to verify that no duplicate element is produced.
     ///
@@ -465,7 +466,8 @@ impl<T> Pool<T> {
     }
 
     /// Borrow multiple elements mutably at once with different IDs.
-    /// This function has no immutable counterpart as it's already possible to acive with [`Pool::get`].
+    /// This function has no immutable counterpart as it's already possible to achive the same
+    /// behavior with [`Pool::get_unchecked`].
     ///
     /// # Safety
     /// None of the [`Id`] values produced by the `ids` iterator should compare
@@ -481,7 +483,7 @@ impl<T> Pool<T> {
     /// // Safe code, no aliasing violation
     /// let _ = unsafe { p.borrow_batch_mut_unchecked(std::iter::once(id)) };
     ///
-    /// // !UNSAFE: multiple mutable references produced same element
+    /// // !UNSAFE: multiple mutable references produced to the same element
     /// let _ = unsafe { p.borrow_batch_mut_unchecked(std::iter::repeat_n(id, 4)) };
     /// ```
     ///
@@ -520,6 +522,9 @@ impl<T> Pool<T> {
     }
 
     /// Explicitly drop an id's value and mark it as uninitialized.
+    ///
+    /// The empty slot will be available for reuse with [`Pool::alloc`] and similar.
+    ///
     /// This operation is safe, and will silently return without doing
     /// anything if `id` is invalid or uninit.
     pub fn free(&mut self, id: Id) {
@@ -533,6 +538,7 @@ impl<T> Pool<T> {
     }
 
     /// Move an item out from the pool and own it.
+    ///
     /// If the id is not valid or is associated with an uninitialized value,
     /// the function will return [`None`].
     #[must_use = "if you dont care about the value consider using `Pool::free`"]
@@ -550,12 +556,14 @@ impl<T> Pool<T> {
 impl<T> Index<Id> for Pool<T> {
     type Output = T;
 
+    /// Same as [`Pool::get`], except it unwraps the value.
     fn index(&self, index: Id) -> &Self::Output {
         self.get(index).unwrap()
     }
 }
 
 impl<T> IndexMut<Id> for Pool<T> {
+    /// Same as [`Pool::get_mut`], except it unwraps the value.
     fn index_mut(&mut self, index: Id) -> &mut Self::Output {
         self.get_mut(index).unwrap()
     }

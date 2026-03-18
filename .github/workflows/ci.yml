@@ -34,7 +34,7 @@ jobs:
       - run: cargo doc --no-deps
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./target/doc
+          path: ./target/doc/pool
 
       - id: deployment
         uses: actions/deploy-pages@v4
